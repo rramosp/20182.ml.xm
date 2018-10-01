@@ -88,28 +88,56 @@ class Example_Bayes2DClassifier():
     
     def score(self, X, y):
         return np.sum(self.predict(X)==y)*1./len(y)
+
+    # get limits for numeric computation. 
+    # points all along the bounding box should have very low probability
+    def get_boundingbox_probs(self, pdf, box_size):
+        lp = np.linspace(-box_size,box_size,50)
+        cp = np.ones(len(lp))*lp[0]
+        bp = np.sum([pdf([x,y]) for x,y in zip(lp, cp)]  + \
+                    [pdf([x,y]) for x,y in zip(lp, -cp)] + \
+                    [pdf([y,x]) for x,y in zip(lp, cp)]  + \
+                    [pdf([y,x]) for x,y in zip(lp, -cp)])
+        return bp
     
+    def get_prob_mesh(self, xrng, yrng):
+        rngs = np.exp(np.arange(15))
+        for rng in rngs:
+            bp0 = self.get_boundingbox_probs(self.rv0.pdf, rng)
+            bp1 = self.get_boundingbox_probs(self.rv1.pdf, rng)
+            if bp0<1e-1 and bp1<1e-1:
+                break
+        print rng
+        if rng==rngs[-1]:
+            print "warning: bounding box prob size",rng,"has prob",np.max([bp0, bp1])        
+        
+        rng = 3
+        
+        # then, compute numerical approximation by building a grid
+        mins, maxs = [-rng, -rng], [+rng, +rng]
+        n = 100
+        d0 = np.linspace(*xrng, num=n)
+        d1 = np.linspace(*yrng, num=n)
+        gd0,gd1 = np.meshgrid(d0,d1)
+        D = np.hstack((gd0.reshape(-1,1), gd1.reshape(-1,1)))
+
+        p1 = np.r_[[self.rv1.pdf(i) for i in D]].reshape(n,n)
+        p0 = np.r_[[self.rv0.pdf(i) for i in D]].reshape(n,n)
+
+        return p0,p1
+        
     def analytic_score(self):
         """
         returns the analytic score on the knowledge of the probability distributions.
         the computation is a numeric approximation.
         """
 
-        # first get limits for numeric computation. 
-        # points all along the bounding box should have very low probability
-        def get_boundingbox_probs(pdf, box_size):
-            lp = np.linspace(-box_size,box_size,50)
-            cp = np.ones(len(lp))*lp[0]
-            bp = np.sum([pdf([x,y]) for x,y in zip(lp, cp)]  + \
-                        [pdf([x,y]) for x,y in zip(lp, -cp)] + \
-                        [pdf([y,x]) for x,y in zip(lp, cp)]  + \
-                        [pdf([y,x]) for x,y in zip(lp, -cp)])
-            return bp
+
 
         rngs = np.exp(np.arange(15))
         for rng in rngs:
-            bp0 = get_boundingbox_probs(self.rv0.pdf, rng)
-            bp1 = get_boundingbox_probs(self.rv1.pdf, rng)
+            bp0 = self.get_boundingbox_probs(self.rv0.pdf, rng)
+            bp1 = self.get_boundingbox_probs(self.rv1.pdf, rng)
             if bp0<1e-9 and bp1<1e-9:
                 break
 
